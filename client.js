@@ -10,6 +10,32 @@ let ped;
 let interval;
 const playerId = PlayerId();
 let QBCore = null;
+const defaultPedAppearanceFallback = {
+	components: {
+		0: { drawable: 0, texture: 1, palette: 0 },
+		1: { drawable: 0, texture: 0, palette: 0 },
+		2: { drawable: -1, texture: 0, palette: 0 },
+		3: { drawable: -1, texture: 0, palette: 0 },
+		4: { drawable: -1, texture: 0, palette: 0 },
+		5: { drawable: 0, texture: 0, palette: 0 },
+		6: { drawable: -1, texture: 0, palette: 0 },
+		7: { drawable: 0, texture: 0, palette: 0 },
+		8: { drawable: -1, texture: 0, palette: 0 },
+		9: { drawable: 0, texture: 0, palette: 0 },
+		11: { drawable: -1, texture: 0, palette: 0 }
+	},
+	props: {
+		0: { drawable: -1, texture: 0 },
+		1: { drawable: -1, texture: 0 },
+		2: { drawable: -1, texture: 0 },
+		6: { drawable: -1, texture: 0 },
+		7: { drawable: -1, texture: 0 }
+	},
+	hairColor: {
+		primary: 45,
+		secondary: 15
+	}
+};
 
 if (config.useQBVehicles) {
 	QBCore = exports[config.coreResourceName].GetCoreObject();
@@ -171,34 +197,84 @@ function SetPedOnGround() {
 
 }
 
-function ClearAllPedProps() {
-	for (const prop of Object.keys(config.cameraSettings.PROPS)) {
+function getDefaultPedAppearance(pedType) {
+	const defaultPedAppearance = config.defaultPedAppearance || {};
+	const sharedAppearance = defaultPedAppearance.shared || {};
+	const pedAppearance = defaultPedAppearance[pedType] || {};
+
+	return {
+		components: {
+			...defaultPedAppearanceFallback.components,
+			...(sharedAppearance.components || {}),
+			...(pedAppearance.components || {})
+		},
+		props: {
+			...defaultPedAppearanceFallback.props,
+			...(sharedAppearance.props || {}),
+			...(pedAppearance.props || {})
+		},
+		hairColor: {
+			...defaultPedAppearanceFallback.hairColor,
+			...(sharedAppearance.hairColor || {}),
+			...(pedAppearance.hairColor || {})
+		}
+	};
+}
+
+function ClearAllPedProps(propsToClear) {
+	for (const prop of propsToClear) {
 		ClearPedProp(ped, parseInt(prop));
 	}
 }
 
-async function ResetPedComponents() {
+function ApplyDefaultPedProps(defaultProps) {
+	for (const [propId, propSettings] of Object.entries(defaultProps)) {
+		const drawable = propSettings.drawable ?? -1;
+		const texture = propSettings.texture ?? 0;
+		const component = parseInt(propId);
+
+		if (drawable < 0) {
+			ClearPedProp(ped, component);
+			continue;
+		}
+
+		SetPedPropIndex(ped, component, drawable, texture, 0);
+	}
+}
+
+function ApplyDefaultPedComponents(defaultComponents) {
+	for (const [componentId, componentSettings] of Object.entries(defaultComponents)) {
+		SetPedComponentVariation(
+			ped,
+			parseInt(componentId),
+			componentSettings.drawable ?? 0,
+			componentSettings.texture ?? 0,
+			componentSettings.palette ?? 0
+		);
+	}
+}
+
+async function ResetPedComponents(pedType) {
 
 	if (config.debug) console.log(`DEBUG: Resetting Ped Components`);
+	const defaultPedAppearance = getDefaultPedAppearance(pedType);
+	const propsToClear = new Set([
+		...Object.keys(config.cameraSettings.PROPS || {}),
+		...Object.keys(defaultPedAppearance.props || {})
+	]);
 
 	SetPedDefaultComponentVariation(ped);
 
 	await Delay(150);
 
-	SetPedComponentVariation(ped, 0, 0, 1, 0); // Head
-	SetPedComponentVariation(ped, 1, 0, 0, 0); // Mask
-	SetPedComponentVariation(ped, 2, -1, 0, 0); // Hair
-	SetPedComponentVariation(ped, 7, 0, 0, 0); // Accessories
-	SetPedComponentVariation(ped, 5, 0, 0, 0); // Bags
-	SetPedComponentVariation(ped, 6, -1, 0, 0); // Shoes
-	SetPedComponentVariation(ped, 9, 0, 0, 0); // Armor
-	SetPedComponentVariation(ped, 3, -1, 0, 0); // Torso
-	SetPedComponentVariation(ped, 8, -1, 0, 0); // Undershirt
-	SetPedComponentVariation(ped, 4, -1, 0, 0); // Legs
-	SetPedComponentVariation(ped, 11, -1, 0, 0); // Top
-	SetPedHairColor(ped, 45, 15);
-
-	ClearAllPedProps();
+	ApplyDefaultPedComponents(defaultPedAppearance.components);
+	SetPedHairColor(
+		ped,
+		defaultPedAppearance.hairColor.primary ?? defaultPedAppearanceFallback.hairColor.primary,
+		defaultPedAppearance.hairColor.secondary ?? defaultPedAppearanceFallback.hairColor.secondary
+	);
+	ClearAllPedProps(propsToClear);
+	ApplyDefaultPedProps(defaultPedAppearance.props);
 
 	return;
 }
@@ -300,6 +376,41 @@ function createGreenScreenVehicle(vehicleHash, vehicleModel) {
 	});
 }
 
+function parseCustomScreenshotSelectionArg(selectionArg) {
+	const normalizedSelectionArg = (selectionArg || '').toLowerCase().trim();
+
+	if (normalizedSelectionArg === 'all') {
+		return {
+			mode: 'all',
+			startIndex: 0
+		};
+	}
+
+	if (normalizedSelectionArg.startsWith('all:')) {
+		const startIndex = parseInt(normalizedSelectionArg.slice(4), 10);
+
+		if (isNaN(startIndex) || startIndex < 0) {
+			return null;
+		}
+
+		return {
+			mode: 'all',
+			startIndex
+		};
+	}
+
+	const value = parseInt(normalizedSelectionArg, 10);
+
+	if (isNaN(value) || value < 0) {
+		return null;
+	}
+
+	return {
+		mode: 'single',
+		value
+	};
+}
+
 
 RegisterCommand('screenshot', async (source, args) => {
 	const modelHashes = [GetHashKey('mp_m_freemode_01'), GetHashKey('mp_f_freemode_01')];
@@ -346,7 +457,7 @@ RegisterCommand('screenshot', async (source, args) => {
 
 			for (const type of Object.keys(config.cameraSettings)) {
 				for (const stringComponent of Object.keys(config.cameraSettings[type])) {
-					await ResetPedComponents();
+					await ResetPedComponents(pedType);
 					await Delay(150);
 					const component = parseInt(stringComponent);
 					if (type === 'CLOTHING') {
@@ -413,10 +524,14 @@ RegisterCommand('customscreenshot', async (source, args) => {
 
 	const type = args[2].toUpperCase();
 	const component = parseInt(args[0]);
-	let drawable = args[1].toLowerCase() == 'all' ? args[1].toLowerCase() : parseInt(args[1]);
-	let prop = args[1].toLowerCase() == 'all' ? args[1].toLowerCase() : parseInt(args[1]);
+	const selection = parseCustomScreenshotSelectionArg(args[1]);
 	const gender = args[3].toLowerCase();
 	let cameraSettings;
+
+	if (!selection) {
+		console.log('ERROR: Invalid drawable/prop argument. Use a number, all, or all:<startIndex>');
+		return;
+	}
 
 
 	let modelHashes;
@@ -430,12 +545,12 @@ RegisterCommand('customscreenshot', async (source, args) => {
 	}
 
 	if (args[4] != null) {
-		let cameraSettings = ''
+		let cameraSettingsJson = '';
 		for (let i = 4; i < args.length; i++) {
-			cameraSettings += args[i] + ' ';
+			cameraSettingsJson += args[i] + ' ';
 		}
 
-		cameraSettings = JSON.parse(cameraSettings);
+		cameraSettings = JSON.parse(cameraSettingsJson.trim());
 	}
 
 
@@ -474,16 +589,16 @@ RegisterCommand('customscreenshot', async (source, args) => {
 			await Delay(50);
 			SetPlayerControl(playerId, false);
 
-			ResetPedComponents();
+			await ResetPedComponents(pedType);
 			await Delay(150);
 
-			if (drawable == 'all') {
+			if (selection.mode === 'all') {
 				SendNUIMessage({
 					start: true,
 				});
 				if (type === 'CLOTHING') {
 					const drawableVariationCount = GetNumberOfPedDrawableVariations(ped, component);
-					for (drawable = 0; drawable < drawableVariationCount; drawable++) {
+					for (let drawable = selection.startIndex; drawable < drawableVariationCount; drawable++) {
 						const textureVariationCount = GetNumberOfPedTextureVariations(ped, component, drawable);
 						SendNUIMessage({
 							type: config.cameraSettings[type][component].name,
@@ -502,7 +617,7 @@ RegisterCommand('customscreenshot', async (source, args) => {
 					}
 				} else if (type === 'PROPS') {
 					const propVariationCount = GetNumberOfPedPropDrawableVariations(ped, component);
-					for (prop = 0; prop < propVariationCount; prop++) {
+					for (let prop = selection.startIndex; prop < propVariationCount; prop++) {
 						const textureVariationCount = GetNumberOfPedPropTextureVariations(ped, component, prop);
 						SendNUIMessage({
 							type: config.cameraSettings[type][component].name,
@@ -521,30 +636,30 @@ RegisterCommand('customscreenshot', async (source, args) => {
 						}
 					}
 				}
-			} else if (!isNaN(drawable)) {
+			} else {
 				if (type === 'CLOTHING') {
-					const textureVariationCount = GetNumberOfPedTextureVariations(ped, component, drawable);
+					const textureVariationCount = GetNumberOfPedTextureVariations(ped, component, selection.value);
 
 					if (config.includeTextures) {
 						for (let texture = 0; texture < textureVariationCount; texture++) {
-							await LoadComponentVariation(ped, component, drawable, texture);
-							await takeScreenshotForComponent(pedType, type, component, drawable, texture, cameraSettings);
+							await LoadComponentVariation(ped, component, selection.value, texture);
+							await takeScreenshotForComponent(pedType, type, component, selection.value, texture, cameraSettings);
 						}
 					} else {
-						await LoadComponentVariation(ped, component, drawable);
-						await takeScreenshotForComponent(pedType, type, component, drawable, null, cameraSettings);
+						await LoadComponentVariation(ped, component, selection.value);
+						await takeScreenshotForComponent(pedType, type, component, selection.value, null, cameraSettings);
 					}
 				} else if (type === 'PROPS') {
-					const textureVariationCount = GetNumberOfPedPropTextureVariations(ped, component, prop);
+					const textureVariationCount = GetNumberOfPedPropTextureVariations(ped, component, selection.value);
 
 					if (config.includeTextures) {
 						for (let texture = 0; texture < textureVariationCount; texture++) {
-							await LoadPropVariation(ped, component, prop, texture);
-							await takeScreenshotForComponent(pedType, type, component, prop, texture, cameraSettings);
+							await LoadPropVariation(ped, component, selection.value, texture);
+							await takeScreenshotForComponent(pedType, type, component, selection.value, texture, cameraSettings);
 						}
 					} else {
-						await LoadPropVariation(ped, component, prop);
-						await takeScreenshotForComponent(pedType, type, component, prop, null, cameraSettings);
+						await LoadPropVariation(ped, component, selection.value);
+						await takeScreenshotForComponent(pedType, type, component, selection.value, null, cameraSettings);
 					}
 				}
 			}
@@ -753,7 +868,7 @@ setImmediate(() => {
 			help: 'generate custom cloting screenshots',
 			params: [
 				{name:"component", help:"The clothing component to take a screenshot of"},
-				{name:"drawable/all", help:"The drawable variation to take a screenshot of"},
+				{name:"drawable/all/all:start", help:"A single variation, all variations, or all starting from a specific index"},
 				{name:"props/clothing", help:"PROPS or CLOTHING"},
 				{name:"male/female/both", help:"The gender to take a screenshot of"},
 				{name:"camera settings", help:"The camera settings to use for the screenshot (optional)"},

@@ -4,11 +4,10 @@
   "description": "",
   "main": "client.js",
   "scripts": {
-    "preinstall": "ml-regression-exponential",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "author": "",
+  "author": "sys31337 <13190500+sys31337@users.noreply.github.com>",
   "license": "ISC",
   "dependencies": {
     "@citizenfx/client": "^2.0.6878-1",
@@ -19,5 +18,6 @@
   },
   "resolutions": {
     "ml-regression-exponential": "2.1.0"
-  }
+  },
+  "repository": "https://github.com/sys31337/fivem-greenscreener.git"
 }

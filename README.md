@@ -1,87 +1,249 @@
 # fivem-greenscreener
 
-A small script that allows you to take screenshots of every gta clothing, prop/object or vehicle against a greenscreen.
-You can use them for example in your inventory, clothing store or vehicle store.
+`fivem-greenscreener` captures screenshots of GTA V clothing, props, objects, weapons, and vehicles against a green screen. It saves the raw screenshots into this resource's `images/` folder and can optionally POST each saved file to an HTTP endpoint for automatic post-processing.
 
-## Using the images
+## What Is Included
 
-You are granted the freedom to utilize the images in your open-source projects with proper accreditation.
-For commercial usage, please reach out to me on Discord to discuss the conditions.
+- The FiveM resource in the project root:
+  captures screenshots in game and saves them to `images/clothing`, `images/objects`, and `images/vehicles`.
+- The optional post-processing app in `screener/app.js`:
+  receives `{ "fileName": "..." }`, loads the saved image, removes the green background, and overwrites the image.
 
-## Key Features
+## Important Folder Rule
 
-- Capture screenshots of every GTA clothing item, including addon clothing
-- Capture screenshots of all objects and props in GTA, including addon props
-- Capture screenshots of every vehicle in GTA, including addon vehicles
-- Screenshots are labeled comprehensively for seamless integration into your scripts
-- Minimalistic progress UI for user convenience
-- Almost completely invisible ped
-- Customizable camera positions through configuration settings
-- Option to enable cycling through texture variations
-- Automatic removal of the greenscreen backdrop (courtesy of [@hakanesnn](https://github.com/hakanesnn))
-- Utilizes a large greenscreen box (thanks to [@jimgordon20](https://github.com/jimgordon20/jim_g_green_screen))
+Place this resource directly inside `resources/`.
 
-## Planned Updates
-
-- Feel free to share any ideas or suggestions for future enhancements!
-
-## Installation
-
-Simply clone the repository and place the resource in your resources folder.
-
-**Do not use a subfolder like `resources/[scripts]` as it will cause the script to malfunction.**
+Do not put it inside a subfolder such as `resources/[scripts]/fivem-greenscreener`, because the server-side save path uses `resources/<resourceName>/images`.
 
 ## Dependencies
 
-- [screenshot-basic](https://github.com/citizenfx/screenshot-basic)
-- yarn
+- [`screenshot-basic`](https://github.com/citizenfx/screenshot-basic)
+- Node.js
+- `npm` or `yarn`
 
-## Usage
+If you use QB vehicle definitions, `qb-core` must be started before this resource.
 
-### Screenshot all clothing
+## Install
 
-Execute the command `/screenshot` to initiate the clothing screenshot process.
-Be patient as it may take some time to complete, and it's advisable not to interfere with your PC during this operation.
+### 1. Install the resource dependencies
 
+From the resource root:
 
-### Screenshot specific clothing
+```powershell
+cd resources/fivem-greenscreener
+npm install
+```
 
-Utilize the command `/customscreenshot` to capture a specific clothing item, with optional custom camera settings specified in the format outlined in `config.json`.
+### 2. Install the optional screener service dependencies
 
-`/customscreenshot [component] [drawable/all] [props/clothing] [male/female/both] [camerasettings(optional)]`
+Only do this if you want automatic green-screen removal through HTTP POST:
 
-`/customscreenshot 11 17 clothing male {"fov": 55, "rotation": { "x": 0, "y": 0, "z": 15}, "zPos": 0.26}`
+```powershell
+cd resources/fivem-greenscreener/screener
+npm install
+```
 
-`/customscreenshot 11 all clothing male {"fov": 55, "rotation": { "x": 0, "y": 0, "z": 15}, "zPos": 0.26}`
+### 3. Configure `config.json`
 
+The new `postProcessEndpoint` value controls where each saved image is POSTed.
 
-### Screenshot objects/props
+```json
+"postProcessEndpoint": "http://localhost:5001/api/screener"
+```
 
-To screenshot objects or props, employ the command `/screenshotobject [hash]`.
+Notes:
 
-Example Usage:
-`/screenshotobject 2240524752`
+- Set it to `""` to disable automatic POST requests entirely.
+- If you run the bundled screener app on another host or port, update this URL to match.
+- Screenshots are still saved locally even if post-processing is disabled.
+- `defaultPedAppearance.shared` is the base outfit applied before each clothing or prop screenshot.
+- You can add `defaultPedAppearance.male` or `defaultPedAppearance.female` blocks with the same structure to override the shared base outfit per gender.
 
-### Screenshot vehicles
+### 4. Start the optional screener service
 
-Capture screenshots of vehicles using `/screenshotvehicle [model/all] [primarycolor(optional)] [secondarycolor(optional)]`.
+From the `screener/` folder:
 
-Example Usage:
-`/screenshotvehicle all 1 1`
+```powershell
+cd resources/fivem-greenscreener/screener
+node app.js
+```
 
-`/screenshotvehicle zentorno 1 1`
+Default bundled endpoint:
 
-## Examples
+```text
+http://localhost:5001/api/screener
+```
 
-<img src="https://i.imgur.com/2WJyGgy.png" width="200"> <img src="https://i.imgur.com/aAQwU4d.png" width="200">
-<img src="https://i.imgur.com/EqY5Inu.png" width="200"> <img src="https://i.imgur.com/ctTF9M9.png" width="200">
-<img src="https://i.imgur.com/6qD7hF3.png" width="200"> <img src="https://i.imgur.com/xdMyGyk.png" width="200">
+### 5. Ensure the resources in `server.cfg`
 
-## Support
+```cfg
+ensure screenshot-basic
+ensure fivem-greenscreener
+```
 
-For support just join my [discord](https://discord.gg/yN96thgggk).
+If `useQBVehicles` is `true`, also make sure `qb-core` starts before `fivem-greenscreener`.
 
-## Support the Project
+## Output Folders
 
-If you wish to support this project, consider buying me a coffee on [ko-fi](https://ko-fi.com/bentix). Your support is greatly appreciated! ❤️​
+- Clothing and props: `images/clothing`
+- Objects and weapons: `images/objects`
+- Vehicles: `images/vehicles`
 
+## In-Game Commands
+
+### `/screenshot`
+
+Captures every configured clothing component and prop for both freemode male and freemode female peds.
+
+Use:
+
+```text
+/screenshot
+```
+
+What it uses:
+
+- `cameraSettings` from `config.json`
+- `includeTextures`
+- `overwriteExistingImages`
+
+### `/customscreenshot`
+
+Captures one clothing or prop component, one drawable or all drawables, for male, female, or both. You can also pass a custom camera JSON object.
+
+Syntax:
+
+```text
+/customscreenshot [component] [drawable|all|all:startIndex] [clothing|props] [male|female|both] [cameraJson(optional)]
+```
+
+Examples:
+
+```text
+/customscreenshot 11 17 clothing male
+/customscreenshot 11 all clothing female
+/customscreenshot 3 all:80 clothing male
+/customscreenshot 0 all props both
+/customscreenshot 0 all:25 props male
+/customscreenshot 11 17 clothing male {"fov":55,"rotation":{"x":0,"y":0,"z":15},"zPos":0.26}
+```
+
+Resume notes:
+
+- `all` starts from drawable or prop `0`.
+- `all:80` starts from drawable or prop `80`.
+- This works for both `clothing` and `props`.
+
+Built-in component ids:
+
+Clothing:
+
+- `1` Masks
+- `3` Torsos
+- `4` Legs
+- `5` Bags
+- `6` Shoes
+- `7` Accessories
+- `8` Undershirts
+- `9` Body Armors
+- `11` Tops
+
+Props:
+
+- `0` Hats
+- `1` Glasses
+- `2` Ears
+- `6` Watches
+- `7` Bracelets
+
+### `/screenshotobject`
+
+Captures a single object model. You can pass a model name, numeric hash, or weapon hash. Weapon hashes are converted to the weapon model automatically.
+
+Syntax:
+
+```text
+/screenshotobject [modelName|hash]
+```
+
+Examples:
+
+```text
+/screenshotobject prop_cs_cardbox_01
+/screenshotobject 2240524752
+```
+
+### `/screenshotvehicle`
+
+Captures one vehicle or every vehicle. If you pass one color id, it is used for both primary and secondary color. If you pass two, they are applied separately.
+
+Syntax:
+
+```text
+/screenshotvehicle [model|all] [primaryColor(optional)] [secondaryColor(optional)]
+```
+
+Examples:
+
+```text
+/screenshotvehicle zentorno
+/screenshotvehicle zentorno 1
+/screenshotvehicle zentorno 1 111
+/screenshotvehicle all
+/screenshotvehicle all 1 1
+```
+
+Vehicle notes:
+
+- When `useQBVehicles` is `false`, the command loops over `GetAllVehicleModels()`.
+- When `useQBVehicles` is `true`, it uses `QBCore.Shared.Vehicles`.
+- Vehicle classes are filtered by `includedVehicleClasses` in `config.json`.
+
+### `/stopscreen`
+
+Stops the current capture run, re-enables player control, and resumes weather sync where supported.
+
+Use:
+
+```text
+/stopscreen
+```
+
+## Key Config Values
+
+From `config.json`:
+
+- `debug`: prints extra logs.
+- `includeTextures`: captures every texture variation instead of only the default texture.
+- `overwriteExistingImages`: when `false`, existing PNG files are skipped.
+- `postProcessEndpoint`: URL the server posts `{ fileName }` to after each screenshot is saved.
+- `defaultPedAppearance`: base components, props, and hair color that stay on the ped for each screenshot while only the target clothing slot or prop is changed.
+- `useQBVehicles`: switch vehicle iteration from native vehicle models to QB vehicles.
+- `vehicleSpawnTimeout`: timeout in milliseconds before a vehicle spawn attempt is treated as failed.
+- `cameraSettings`: per-component camera position, rotation, and FOV presets used by `/screenshot` and by `/customscreenshot` when no override JSON is provided.
+
+## Typical Workflow
+
+1. Start the screener service with `node app.js` if you want automatic background removal.
+2. Start your FiveM server with `ensure screenshot-basic` and `ensure fivem-greenscreener`.
+3. Join the server.
+4. Run one of the in-game commands above.
+5. Collect the generated PNGs from `images/`.
+
+## Troubleshooting
+
+- Nothing is being POSTed:
+  check `postProcessEndpoint` in `config.json` and make sure the HTTP service is running.
+- Images save but keep the green background:
+  the FiveM resource is working, but the post-processing endpoint is disabled, unreachable, or returning an error.
+- Vehicle screenshots are missing some models:
+  confirm the vehicle's class is enabled in `includedVehicleClasses`.
+- Custom camera JSON seems ignored:
+  use valid JSON with double quotes, for example `{"fov":55,"rotation":{"x":0,"y":0,"z":15},"zPos":0.26}`.
+- Resuming from `all:n` does not work:
+  make sure the second argument is exactly in the form `all:80` with a non-negative number after the colon.
+
+## Credits
+
+- Automatic green-screen removal idea and processing support: [@hakanesnn](https://github.com/hakanesnn)
+- Green-screen box resource inspiration: [@jimgordon20](https://github.com/jimgordon20/jim_g_green_screen)

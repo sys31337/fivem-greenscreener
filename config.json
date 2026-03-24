@@ -4,6 +4,8 @@
   "//__comment__//textures": "The image generation will take much longer and you will have much more images!",
   "overwriteExistingImages": true,
 	"//__comment__//overwrite": "If false, existing image files will be skipped instead of overwritten",
+  "postProcessEndpoint": "http://localhost:5001/api/screener",
+  "//__comment__//postProcessEndpoint": "The HTTP endpoint that receives { fileName }. Set to an empty string to disable automatic post-processing.",
   "useQBVehicles": false,
   "//__comment__//qbvehicles": "If you want to use the QB Vehicles in the vehicles.lua file, set this to true. QBCore has to be installed and started before this script!",
   "coreResourceName": "qb-core",
@@ -35,6 +37,35 @@
   "//__comment__//classes": "The classes that will be included in the image generation. See https://docs.fivem.net/natives/?_0x29439776AAA00A62",
   "vehicleSpawnTimeout": 5000,
   "//__comment__//timeout": "The time in milliseconds that the script will wait before spawning the next vehicle.",
+  "defaultPedAppearance": {
+    "shared": {
+      "components": {
+        "0": { "drawable": 0, "texture": 1, "palette": 0 },
+        "1": { "drawable": 0, "texture": 0, "palette": 0 },
+        "2": { "drawable": -1, "texture": 0, "palette": 0 },
+        "3": { "drawable": -1, "texture": 0, "palette": 0 },
+        "4": { "drawable": -1, "texture": 0, "palette": 0 },
+        "5": { "drawable": 0, "texture": 0, "palette": 0 },
+        "6": { "drawable": -1, "texture": 0, "palette": 0 },
+        "7": { "drawable": 0, "texture": 0, "palette": 0 },
+        "8": { "drawable": -1, "texture": 0, "palette": 0 },
+        "9": { "drawable": 0, "texture": 0, "palette": 0 },
+        "11": { "drawable": -1, "texture": 0, "palette": 0 }
+      },
+      "props": {
+        "0": { "drawable": -1, "texture": 0 },
+        "1": { "drawable": -1, "texture": 0 },
+        "2": { "drawable": -1, "texture": 0 },
+        "6": { "drawable": -1, "texture": 0 },
+        "7": { "drawable": -1, "texture": 0 }
+      },
+      "hairColor": {
+        "primary": 45,
+        "secondary": 15
+      }
+    }
+  },
+  "//__comment__//defaultPedAppearance": "Base outfit applied before each clothing or prop screenshot. Add optional male or female objects with the same structure to override shared values per gender.",
   "cameraSettings": {
     "CLOTHING": {
       "1": {
