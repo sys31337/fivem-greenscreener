@@ -8,6 +8,7 @@ const fetch = require("node-fetch");
 
 const resName = GetCurrentResourceName();
 const mainSavePath = `resources/${resName}/images`;
+const config = JSON.parse(LoadResourceFile(GetCurrentResourceName(), "config.json"));
 
 try {
 	if (!fs.existsSync(mainSavePath)) {
@@ -19,10 +20,27 @@ try {
 		if (!fs.existsSync(savePath)) {
 			fs.mkdirSync(savePath);
 		}
+
+		const fullFilePath = savePath + "/" + filename + ".png";
+
+		// Check if file exists and overwrite is disabled
+		if (!config.overwriteExistingImages && fs.existsSync(fullFilePath)) {
+			if (config.debug) {
+				console.log(
+					`DEBUG: Skipping existing file: ${filename}.png (overwriteExistingImages = false)`
+				);
+			}
+			return;
+		}
+
+		if (config.debug) {
+			console.log(`DEBUG: Processing screenshot: ${filename}.png`);
+		}
+
 		exports['screenshot-basic'].requestClientScreenshot(
 			source,
 			{
-				fileName: savePath + '/' + filename + '.png',
+				fileName: fullFilePath,
 				encoding: 'png',
 				quality: 1.0,
 			},
