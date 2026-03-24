@@ -1,8 +1,10 @@
 /// <reference types="@citizenfx/server" />
 /// <reference types="image-js" />
 
-const imagejs = require('image-js');
 const fs = require('fs');
+const http = require('http');
+const fetch = require("node-fetch");
+
 
 const resName = GetCurrentResourceName();
 const mainSavePath = `resources/${resName}/images`;
@@ -25,27 +27,13 @@ try {
 				quality: 1.0,
 			},
 			async (err, fileName) => {
-				let image = await imagejs.Image.load(fileName);
-				const coppedImage = image.crop({ x: image.width / 4.5, width: image.height });
-
-				image.data = coppedImage.data;
-				image.width = coppedImage.width;
-				image.height = coppedImage.height;
-
-				for (let x = 0; x < image.width; x++) {
-					for (let y = 0; y < image.height; y++) {
-						const pixelArr = image.getPixelXY(x, y);
-						const r = pixelArr[0];
-						const g = pixelArr[1];
-						const b = pixelArr[2];
-
-						if (g > r + b) {
-							image.setPixelXY(x, y, [255, 255, 255, 0]);
-						}
-					}
-				}
-
-				image.save(fileName);
+				const body = {fileName: `${type}/${filename}.png`};
+				const req = await fetch('http://localhost:5001/api/screener', {
+					method: 'POST',
+					body: JSON.stringify(body),
+					headers: { 'Content-Type': 'application/json' }
+				})
+				console.log(JSON.stringify(req))
 			}
 		);
 	});

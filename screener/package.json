@@ -1,0 +1,12 @@
+{
+  "name": "screener",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "canvas": "^3.0.0-rc3",
+    "express": "^5.1.0",
+    "image-js": "^0.35.5",
+    "multer": "^2.0.1"
+  }
+}

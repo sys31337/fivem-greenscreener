@@ -336,6 +336,7 @@ RegisterCommand('screenshot', async (source, args) => {
 			SetEntityRotation(ped, config.greenScreenRotation.x, config.greenScreenRotation.y, config.greenScreenRotation.z, 0, false);
 			SetEntityCoordsNoOffset(ped, config.greenScreenPosition.x, config.greenScreenPosition.y, config.greenScreenPosition.z, false, false, false);
 			FreezeEntityPosition(ped, true);
+			// SetEntityAlpha(ped, 0, false)
 			await Delay(50);
 			SetPlayerControl(playerId, false);
 
@@ -618,6 +619,13 @@ RegisterCommand('screenshotobject', async (source, args) => {
 	RenderScriptCams(false, false, 0, true, false, 0);
 	cam = null;
 });
+
+RegisterCommand('stopscreen', async (source, args) => {
+	startWeatherResource();
+	clearInterval(interval);
+	SetPlayerControl(playerId, true);
+	FreezeEntityPosition(ped, false);
+})
 
 RegisterCommand('screenshotvehicle', async (source, args) => {
 	const vehicles = (config.useQBVehicles && QBCore != null) ? Object.keys(QBCore.Shared.Vehicles) : GetAllVehicleModels();
