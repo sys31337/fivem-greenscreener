@@ -10,6 +10,8 @@ let ped;
 let interval;
 const playerId = PlayerId();
 let QBCore = null;
+const pendingRedoQueueRequests = new Map();
+let redoQueueRequestId = 0;
 const defaultPedAppearanceFallback = {
 	components: {
 		0: { drawable: 0, texture: 1, palette: 0 },
@@ -40,6 +42,18 @@ const defaultPedAppearanceFallback = {
 if (config.useQBVehicles) {
 	QBCore = exports[config.coreResourceName].GetCoreObject();
 }
+
+onNet('receiveRedoQueue', (requestId, redoQueue) => {
+	const pendingRequest = pendingRedoQueueRequests.get(requestId);
+
+	if (!pendingRequest) {
+		return;
+	}
+
+	pendingRedoQueueRequests.delete(requestId);
+	clearTimeout(pendingRequest.timeout);
+	pendingRequest.resolve(redoQueue);
+});
 
 async function takeScreenshotForComponent(pedType, type, component, drawable, texture, cameraSettings) {
 	const cameraInfo = cameraSettings ? cameraSettings : config.cameraSettings[type][component];
@@ -82,7 +96,18 @@ async function takeScreenshotForComponent(pedType, type, component, drawable, te
 
 	SetEntityRotation(ped, camInfo.rotation.x, camInfo.rotation.y, camInfo.rotation.z, 2, false);
 
-	emitNet('takeScreenshot', `${pedType}_${type == 'PROPS' ? '' : ''}${component}_${drawable}${texture ? `_${texture}`: ''}`, 'clothing');
+	emitNet(
+		'takeScreenshot',
+		`${pedType}_${type == 'PROPS' ? 'prop_' : ''}${component}_${drawable}${texture ? `_${texture}`: ''}`,
+		'clothing',
+		{
+			pedType,
+			type,
+			component,
+			drawable,
+			texture: texture ?? 0
+		}
+	);
 	await Delay(2000);
 	return;
 }
@@ -411,6 +436,129 @@ function parseCustomScreenshotSelectionArg(selectionArg) {
 	};
 }
 
+function getModelHashesForGender(gender) {
+	if (gender == 'male') {
+		return [GetHashKey('mp_m_freemode_01')];
+	}
+
+	if (gender == 'female') {
+		return [GetHashKey('mp_f_freemode_01')];
+	}
+
+	if (gender == 'both') {
+		return [GetHashKey('mp_m_freemode_01'), GetHashKey('mp_f_freemode_01')];
+	}
+
+	return [];
+}
+
+function getPedTypeFromModelHash(modelHash) {
+	return modelHash === GetHashKey('mp_m_freemode_01') ? 'male' : 'female';
+}
+
+function normalizeRedoValues(values) {
+	if (!Array.isArray(values)) {
+		return [];
+	}
+
+	return [...new Set(
+		values
+			.map((value) => parseInt(value, 10))
+			.filter((value) => !isNaN(value) && value >= 0)
+	)].sort((a, b) => a - b);
+}
+
+function hasRedoEntriesForPedType(redoQueue, pedType) {
+	const clothingEntries = Object.values(redoQueue?.clothing?.[pedType] || {}).some((values) => normalizeRedoValues(values).length > 0);
+	const propEntries = Object.values(redoQueue?.props?.[pedType] || {}).some((values) => normalizeRedoValues(values).length > 0);
+
+	return clothingEntries || propEntries;
+}
+
+function requestRedoQueueFromServer() {
+	return new Promise((resolve, reject) => {
+		redoQueueRequestId += 1;
+		const requestId = `${GetGameTimer()}_${redoQueueRequestId}`;
+		const timeout = setTimeout(() => {
+			pendingRedoQueueRequests.delete(requestId);
+			reject(new Error('Timed out while reading redo-queue.json'));
+		}, 5000);
+
+		pendingRedoQueueRequests.set(requestId, {
+			resolve,
+			reject,
+			timeout
+		});
+
+		emitNet('requestRedoQueue', requestId);
+	});
+}
+
+async function captureRedoEntriesForType(pedType, type, queueEntries) {
+	for (const [componentId, values] of Object.entries(queueEntries || {})) {
+		const component = parseInt(componentId, 10);
+		const normalizedValues = normalizeRedoValues(values);
+		const cameraSettings = config.cameraSettings?.[type]?.[component];
+
+		if (isNaN(component) || normalizedValues.length === 0) {
+			continue;
+		}
+
+		if (!cameraSettings) {
+			console.log(`ERROR: No camera settings found for ${type} component ${component}`);
+			continue;
+		}
+
+		await ResetPedComponents(pedType);
+		await Delay(150);
+
+		const maxVariationCount = type === 'CLOTHING'
+			? GetNumberOfPedDrawableVariations(ped, component)
+			: GetNumberOfPedPropDrawableVariations(ped, component);
+
+		for (let index = 0; index < normalizedValues.length; index++) {
+			const drawable = normalizedValues[index];
+
+			if (drawable >= maxVariationCount) {
+				console.log(`ERROR: Skipping ${type} component ${component} drawable ${drawable} because it exceeds the available range (${maxVariationCount - 1})`);
+				continue;
+			}
+
+			SendNUIMessage({
+				type: `${cameraSettings.name} redo`,
+				value: index + 1,
+				max: normalizedValues.length,
+			});
+
+			if (type === 'CLOTHING') {
+				const textureVariationCount = GetNumberOfPedTextureVariations(ped, component, drawable);
+
+				if (config.includeTextures) {
+					for (let texture = 0; texture < textureVariationCount; texture++) {
+						await LoadComponentVariation(ped, component, drawable, texture);
+						await takeScreenshotForComponent(pedType, type, component, drawable, texture);
+					}
+				} else {
+					await LoadComponentVariation(ped, component, drawable);
+					await takeScreenshotForComponent(pedType, type, component, drawable);
+				}
+			} else if (type === 'PROPS') {
+				const textureVariationCount = GetNumberOfPedPropTextureVariations(ped, component, drawable);
+
+				if (config.includeTextures) {
+					for (let texture = 0; texture < textureVariationCount; texture++) {
+						await LoadPropVariation(ped, component, drawable, texture);
+						await takeScreenshotForComponent(pedType, type, component, drawable, texture);
+					}
+				} else {
+					await LoadPropVariation(ped, component, drawable);
+					await takeScreenshotForComponent(pedType, type, component, drawable);
+				}
+			}
+		}
+	}
+}
+
 
 RegisterCommand('screenshot', async (source, args) => {
 	const modelHashes = [GetHashKey('mp_m_freemode_01'), GetHashKey('mp_f_freemode_01')];
@@ -533,15 +681,11 @@ RegisterCommand('customscreenshot', async (source, args) => {
 		return;
 	}
 
+	const modelHashes = getModelHashesForGender(gender);
 
-	let modelHashes;
-
-	if (gender == 'male') {
-		modelHashes = [GetHashKey('mp_m_freemode_01')];
-	} else if (gender == 'female') {
-		modelHashes = [GetHashKey('mp_f_freemode_01')];
-	} else {
-		modelHashes = [GetHashKey('mp_m_freemode_01'), GetHashKey('mp_f_freemode_01')];
+	if (modelHashes.length === 0) {
+		console.log('ERROR: Invalid gender. Use male, female, or both');
+		return;
 	}
 
 	if (args[4] != null) {
@@ -582,7 +726,7 @@ RegisterCommand('customscreenshot', async (source, args) => {
 				ClearPedTasksImmediately(ped);
 			}, 1);
 
-			const pedType = modelHash === GetHashKey('mp_m_freemode_01') ? 'male' : 'female';
+			const pedType = getPedTypeFromModelHash(modelHash);
 			SetEntityRotation(ped, config.greenScreenRotation.x, config.greenScreenRotation.y, config.greenScreenRotation.z, 0, false);
 			SetEntityCoordsNoOffset(ped, config.greenScreenPosition.x, config.greenScreenPosition.y, config.greenScreenPosition.z, false, false, false);
 			FreezeEntityPosition(ped, true);
@@ -742,6 +886,95 @@ RegisterCommand('stopscreen', async (source, args) => {
 	FreezeEntityPosition(ped, false);
 })
 
+RegisterCommand('redoscreenshots', async (source, args) => {
+	const gender = (args[0] || 'both').toLowerCase();
+	const modelHashes = getModelHashesForGender(gender);
+
+	if (modelHashes.length === 0) {
+		console.log('ERROR: Invalid gender. Use male, female, or both');
+		return;
+	}
+
+	let redoQueue;
+
+	try {
+		redoQueue = await requestRedoQueueFromServer();
+	} catch (error) {
+		console.log(`ERROR: ${error.message}`);
+		return;
+	}
+
+	const pedTypesToProcess = modelHashes.map((modelHash) => getPedTypeFromModelHash(modelHash));
+
+	if (!pedTypesToProcess.some((pedType) => hasRedoEntriesForPedType(redoQueue, pedType))) {
+		console.log('INFO: redo-queue.json has no clothing or prop entries to redo for the selected gender');
+		return;
+	}
+
+	SendNUIMessage({
+		start: true,
+	});
+
+	if (!stopWeatherResource()) return;
+
+	DisableIdleCamera(true);
+
+	await Delay(100);
+
+	for (const modelHash of modelHashes) {
+		const pedType = getPedTypeFromModelHash(modelHash);
+
+		if (!hasRedoEntriesForPedType(redoQueue, pedType)) {
+			continue;
+		}
+
+		if (IsModelValid(modelHash)) {
+			if (!HasModelLoaded(modelHash)) {
+				RequestModel(modelHash);
+				while (!HasModelLoaded(modelHash)) {
+					await Delay(100);
+				}
+			}
+
+			SetPlayerModel(playerId, modelHash);
+			await Delay(150);
+			SetModelAsNoLongerNeeded(modelHash);
+
+			await Delay(150);
+
+			ped = PlayerPedId();
+
+			interval = setInterval(() => {
+				ClearPedTasksImmediately(ped);
+			}, 1);
+
+			SetEntityRotation(ped, config.greenScreenRotation.x, config.greenScreenRotation.y, config.greenScreenRotation.z, 0, false);
+			SetEntityCoordsNoOffset(ped, config.greenScreenPosition.x, config.greenScreenPosition.y, config.greenScreenPosition.z, false, false, false);
+			FreezeEntityPosition(ped, true);
+			await Delay(50);
+			SetPlayerControl(playerId, false);
+
+			await captureRedoEntriesForType(pedType, 'CLOTHING', redoQueue?.clothing?.[pedType]);
+			await captureRedoEntriesForType(pedType, 'PROPS', redoQueue?.props?.[pedType]);
+
+			SetPlayerControl(playerId, true);
+			FreezeEntityPosition(ped, false);
+			clearInterval(interval);
+		}
+	}
+
+	SetPedOnGround();
+	startWeatherResource();
+	SendNUIMessage({
+		end: true,
+	});
+	DestroyAllCams(true);
+	DestroyCam(cam, true);
+	RenderScriptCams(false, false, 0, true, false, 0);
+	camInfo = null;
+	cam = null;
+})
+
 RegisterCommand('screenshotvehicle', async (source, args) => {
 	const vehicles = (config.useQBVehicles && QBCore != null) ? Object.keys(QBCore.Shared.Vehicles) : GetAllVehicleModels();
 	const ped = PlayerPedId();
@@ -888,6 +1121,13 @@ setImmediate(() => {
 				{name:"model/all", help:"The vehicle model or 'all' to take a screenshot of all vehicles"},
 				{name:"primarycolor", help:"The primary vehicle color to take a screenshot of (optional) See: https://wiki.rage.mp/index.php?title=Vehicle_Colors"},
 				{name:"secondarycolor", help:"The secondary vehicle color to take a screenshot of (optional) See: https://wiki.rage.mp/index.php?title=Vehicle_Colors"},
+			]
+		},
+		{
+			name: '/redoscreenshots',
+			help: 'redo clothing and prop screenshots from redo-queue.json',
+			params: [
+				{name:"male/female/both", help:"The gender queue to redo (optional, defaults to both)"},
 			]
 		}
 	])

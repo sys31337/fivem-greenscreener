@@ -89,6 +89,33 @@ If `useQBVehicles` is `true`, also make sure `qb-core` starts before `fivem-gree
 - Objects and weapons: `images/objects`
 - Vehicles: `images/vehicles`
 
+## Redo Queue
+
+Failed clothing and prop post-processing entries are tracked in `redo-queue.json`.
+
+The file is read dynamically each time you run the redo command, so you can edit it without restarting the resource.
+
+Format:
+
+```json
+{
+  "clothing": {
+    "male": {
+      "1": [0, 16, 82],
+      "4": [11, 433]
+    },
+    "female": {}
+  },
+  "props": {
+    "male": {
+      "0": [220, 237],
+      "1": [57, 58, 81]
+    },
+    "female": {}
+  }
+}
+```
+
 ## In-Game Commands
 
 ### `/screenshot`
@@ -207,6 +234,24 @@ Use:
 
 ```text
 /stopscreen
+```
+
+### `/redoscreenshots`
+
+Reads `redo-queue.json` live from disk and re-runs every clothing and prop entry listed there for the selected gender.
+
+Syntax:
+
+```text
+/redoscreenshots [male|female|both]
+```
+
+Examples:
+
+```text
+/redoscreenshots
+/redoscreenshots male
+/redoscreenshots female
 ```
 
 ## Key Config Values
