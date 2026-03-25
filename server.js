@@ -152,6 +152,72 @@ function formatScreenshotMetadata(screenshotMetadata) {
 	return ` [${entryLocation.category} ${entryLocation.gender} component ${entryLocation.componentId} drawable ${entryLocation.drawable}]`;
 }
 
+function sanitizePathSegment(value, fallback = 'unknown') {
+	if (typeof value !== 'string') {
+		return fallback;
+	}
+
+	const sanitizedValue = value
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '_')
+		.replace(/^_+|_+$/g, '');
+
+	return sanitizedValue || fallback;
+}
+
+function getPedModelFolder(screenshotMetadata) {
+	if (screenshotMetadata?.pedType === 'male') {
+		return 'mp_m_freemode_01';
+	}
+
+	if (screenshotMetadata?.pedType === 'female') {
+		return 'mp_f_freemode_01';
+	}
+
+	return 'unknown_ped';
+}
+
+function getComponentFolder(screenshotMetadata) {
+	const componentName = config.cameraSettings?.[screenshotMetadata?.type]?.[String(screenshotMetadata?.component)]?.name;
+
+	if (componentName) {
+		return sanitizePathSegment(componentName);
+	}
+
+	return `component_${sanitizePathSegment(String(screenshotMetadata?.component ?? ''), 'unknown')}`;
+}
+
+function getClothingFileName(screenshotMetadata) {
+	const drawable = parseInt(screenshotMetadata?.drawable, 10);
+
+	if (isNaN(drawable) || drawable < 0) {
+		return 'unknown.png';
+	}
+
+	if (!config.includeTextures) {
+		return `${drawable}.png`;
+	}
+
+	const texture = parseInt(screenshotMetadata?.texture, 10);
+	const normalizedTexture = isNaN(texture) || texture < 0 ? 0 : texture;
+
+	return `${drawable}_${normalizedTexture}.png`;
+}
+
+function getScreenshotRelativePath(filename, type, screenshotMetadata = null) {
+	if (type === 'clothing' && screenshotMetadata) {
+		return path.join(
+			type,
+			getPedModelFolder(screenshotMetadata),
+			getComponentFolder(screenshotMetadata),
+			getClothingFileName(screenshotMetadata)
+		);
+	}
+
+	return path.join(type, `${filename}.png`);
+}
+
 try {
 	if (!fs.existsSync(mainSavePath)) {
 		fs.mkdirSync(mainSavePath, { recursive: true });
@@ -165,25 +231,26 @@ try {
 	});
 
 	onNet('takeScreenshot', async (filename, type, screenshotMetadata = null) => {
-		const savePath = `${mainSavePath}/${type}`;
-		if (!fs.existsSync(savePath)) {
-			fs.mkdirSync(savePath, { recursive: true });
-		}
+		const relativeFilePath = getScreenshotRelativePath(filename, type, screenshotMetadata);
+		const fullFilePath = path.join(mainSavePath, relativeFilePath);
+		const fullDirectoryPath = path.dirname(fullFilePath);
 
-		const fullFilePath = savePath + "/" + filename + ".png";
+		if (!fs.existsSync(fullDirectoryPath)) {
+			fs.mkdirSync(fullDirectoryPath, { recursive: true });
+		}
 
 		// Check if file exists and overwrite is disabled
 		if (!config.overwriteExistingImages && fs.existsSync(fullFilePath)) {
 			if (config.debug) {
 				console.log(
-					`DEBUG: Skipping existing file: ${filename}.png (overwriteExistingImages = false)`
+					`DEBUG: Skipping existing file: ${relativeFilePath} (overwriteExistingImages = false)`
 				);
 			}
 			return;
 		}
 
 		if (config.debug) {
-			console.log(`DEBUG: Processing screenshot: ${filename}.png`);
+			console.log(`DEBUG: Processing screenshot: ${relativeFilePath}`);
 		}
 
 		exports['screenshot-basic'].requestClientScreenshot(
@@ -195,7 +262,7 @@ try {
 			},
 			async (err, fileName) => {
 				if (err) {
-					console.error(`Failed to capture screenshot ${filename}.png: ${err}`);
+					console.error(`Failed to capture screenshot ${relativeFilePath}: ${err}`);
 					return;
 				}
 
@@ -207,7 +274,7 @@ try {
 					return;
 				}
 
-				const body = { fileName: `${type}/${filename}.png` };
+				const body = { fileName: relativeFilePath.replace(/\\/g, '/') };
 
 				try {
 					const response = await fetch(postProcessEndpoint, {
@@ -224,7 +291,7 @@ try {
 						}
 
 						console.error(
-							`Post-processing failed for ${filename}.png${formatScreenshotMetadata(screenshotMetadata)}: ${response.status} ${response.statusText}${responseText ? ` - ${responseText}` : ''}`
+							`Post-processing failed for ${relativeFilePath}${formatScreenshotMetadata(screenshotMetadata)}: ${response.status} ${response.statusText}${responseText ? ` - ${responseText}` : ''}`
 						);
 						return;
 					}
@@ -232,10 +299,10 @@ try {
 					removeRedoQueueEntry(screenshotMetadata);
 
 					if (config.debug) {
-						console.log(`DEBUG: Posted ${filename}.png to ${postProcessEndpoint}`);
+						console.log(`DEBUG: Posted ${relativeFilePath} to ${postProcessEndpoint}`);
 					}
 				} catch (postProcessError) {
-					console.error(`Failed to POST ${filename}.png to ${postProcessEndpoint}: ${postProcessError.message}`);
+					console.error(`Failed to POST ${relativeFilePath} to ${postProcessEndpoint}: ${postProcessError.message}`);
 				}
 			}
 		);

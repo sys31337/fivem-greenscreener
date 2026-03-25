@@ -7,9 +7,23 @@ customscreenshot 7 all clothing male
 customscreenshot 8 all clothing male
 customscreenshot 9 all clothing male
 customscreenshot 11 all clothing male
-
 customscreenshot 0 all props male
 customscreenshot 1 all props male
 customscreenshot 2 all props male
 customscreenshot 6 all props male
 customscreenshot 7 all props male
+
+customscreenshot 1 all clothing female; mask
+customscreenshot 3 all clothing female; torso
+customscreenshot 4 all clothing female; pants
+customscreenshot 5 all clothing female; bags
+customscreenshot 6 all clothing female; shoes
+customscreenshot 7 all clothing female; accessories
+customscreenshot 8 all clothing female; shirt
+customscreenshot 9 all clothing female; vest
+customscreenshot 11 all clothing female; tops
+customscreenshot 0 all props female; Hats
+customscreenshot 1 all props female; Glasses
+customscreenshot 2 all props female; Ears
+customscreenshot 6 all props female; Watches
+customscreenshot 7 all props female; Bracelets

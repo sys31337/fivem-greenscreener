@@ -98,7 +98,7 @@ async function takeScreenshotForComponent(pedType, type, component, drawable, te
 
 	emitNet(
 		'takeScreenshot',
-		`${pedType}_${type == 'PROPS' ? 'prop_' : ''}${component}_${drawable}${texture ? `_${texture}`: ''}`,
+		null,
 		'clothing',
 		{
 			pedType,

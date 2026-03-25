@@ -85,9 +85,17 @@ If `useQBVehicles` is `true`, also make sure `qb-core` starts before `fivem-gree
 
 ## Output Folders
 
-- Clothing and props: `images/clothing`
+- Clothing and props: `images/clothing/<ped_model>/<component_or_prop_name>/<drawable>.png`
 - Objects and weapons: `images/objects`
 - Vehicles: `images/vehicles`
+
+Examples:
+
+- `images/clothing/mp_m_freemode_01/ears/0.png`
+- `images/clothing/mp_m_freemode_01/ears/2.png`
+- `images/clothing/mp_m_freemode_01/hats/147.png`
+
+If `includeTextures` is `true`, clothing and prop files use `drawable_texture.png` to avoid filename collisions.
 
 ## Redo Queue
 
